@@ -61,7 +61,9 @@ if __name__ == '__main__':
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.95)
 
     print("Start Training.")
+    print("steps / Loss / Average Precision")
     global_step = 0
+    average_loss = []
     try:
         with train_set, valid_set:
             net.train()
@@ -79,6 +81,7 @@ if __name__ == '__main__':
 
                 global_step += 1
                 loss_value = loss.item() / inputs.size(0)
+                average_loss.append(loss_value)
                 # print(global_step, loss.item() / inputs.size(0))
 
                 if global_step % 1000 == 0:
@@ -95,7 +98,8 @@ if __name__ == '__main__':
 
                         y_score = np.vstack(y_score).flatten()
                         y_true = np.vstack(y_true).flatten()
-                        print(global_step, loss_value, average_precision_score(y_true, y_score))
+                        print(global_step, np.mean(average_loss), average_precision_score(y_true, y_score))
+                        average_loss.clear()
                     net.train()
 
     except KeyboardInterrupt:

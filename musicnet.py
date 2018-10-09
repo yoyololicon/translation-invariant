@@ -202,3 +202,58 @@ class MusicNet(Dataset):
                     tree[start_time:end_time] = (instrument, note, start_beat, end_beat, note_value)
             trees[uid] = tree
         return trees
+
+
+class MusicNet_song(Dataset):
+    train_data, train_labels, train_tree = 'train_data', 'train_labels', 'train_tree.pckl'
+    test_data, test_labels, test_tree = 'test_data', 'test_labels', 'test_tree.pckl'
+    extracted_folders = [train_data, train_labels, test_data, test_labels]
+    metafile = 'musicnet_metadata.csv'
+
+    def __init__(self, root, id, sr, normalize=True, window=16384, hopsize=512, duration=90):
+        self.mmap = mmap
+        self.normalize = normalize
+        self.window = window
+        self.hopsize = hopsize
+        self.id = id
+        self.m = 128
+        self.dur = duration
+        self.sr = sr
+
+        self.root = os.path.expanduser(root)
+        filename = str(id) + '.npy'
+
+        labels_path = None
+        for root, _, files in os.walk(self.root):
+            for file in files:
+                if file == filename:
+                    self.data = np.load(os.path.join(root, file)).astype(np.float32)
+                    if self.train_data in root:
+                        labels_path = os.path.join(self.root, self.train_labels, self.train_tree)
+                    else:
+                        labels_path = os.path.join(self.root, self.test_labels, self.test_tree)
+                    break
+
+        if labels_path:
+            with open(labels_path, 'rb') as f:
+                trees = pickle.load(f)
+                self.label = trees[id]
+        else:
+            raise RuntimeError("Can't find the file.")
+
+        self.size = len(self.data) // hopsize + 1
+        self.data = np.pad(self.data, (window // 2, window // 2), 'constant', constant_values=0)
+        if duration:
+            self.data = self.data[:sr * duration + window]
+            self.size = int(sr * duration / hopsize) + 1
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, index):
+        pos = index * self.hopsize
+        x = self.data[pos:pos + self.window]
+        y = np.zeros(self.m, dtype=np.float32)
+        for label in self.label[pos]:
+            y[label.data[1]] = 1
+        return x, y
