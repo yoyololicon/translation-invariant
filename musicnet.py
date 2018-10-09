@@ -10,6 +10,7 @@ from scipy.io import wavfile
 sz_float = 4  # size of a float
 epsilon = 10e-8  # fudge factor for normalization
 
+
 # modified from the origin pytorch musicnet
 # remove download action (you have to download the data outside), and make it can run on python3
 class MusicNet(Dataset):
@@ -242,7 +243,6 @@ class MusicNet_song(Dataset):
             raise RuntimeError("Can't find the file.")
 
         self.size = len(self.data) // hopsize + 1
-        self.data = np.pad(self.data, (window // 2, window // 2), 'constant', constant_values=0)
         if duration:
             self.data = self.data[:sr * duration + window]
             self.size = int(sr * duration / hopsize) + 1
@@ -254,6 +254,6 @@ class MusicNet_song(Dataset):
         pos = index * self.hopsize
         x = self.data[pos:pos + self.window]
         y = np.zeros(self.m, dtype=np.float32)
-        for label in self.label[pos]:
+        for label in self.label[pos + self.window // 2]:
             y[label.data[1]] = 1
         return x, y
