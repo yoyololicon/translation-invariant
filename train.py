@@ -61,7 +61,7 @@ if __name__ == '__main__':
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.95)
 
     print("Start Training.")
-    print("steps / Loss / Average Precision")
+    print("steps / mse / avp_train")
     global_step = 0
     average_loss = []
     try:

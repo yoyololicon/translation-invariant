@@ -29,7 +29,7 @@ if __name__ == '__main__':
         for id in test_ids:
             print('==> Loading ID', id)
             test_song = MusicNet_song(args.root, id, 44100)
-            test_loader = DataLoader(test_song, batch_size=30, num_workers=1)
+            test_loader = DataLoader(test_song, batch_size=10, num_workers=1)
 
             for _, (inputs, targets) in enumerate(test_loader):
                 y_true += [targets.detach().numpy()]
@@ -46,6 +46,7 @@ if __name__ == '__main__':
         def threshold(x):
             y2 = y_score > x
             return 1 - f1_score(y_true, y2)
+
 
         res = minimize_scalar(threshold, bounds=(0, 1), method='bounded')
 
