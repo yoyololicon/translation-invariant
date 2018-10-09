@@ -4,10 +4,10 @@ import numpy as np
 
 
 def create_filters(d, k, sr=44100, start_freq=50, end_freq=6000):
-    x = torch.from_numpy(np.linspace(0, 2 * np.pi, d, endpoint=False).astype(np.float32))
+    x = torch.linspace(0, 2 * np.pi, d + 1)[:d]
     num_cycles = start_freq * d / sr
     scaling_ind = np.log(end_freq / start_freq) / k
-    window_mask = torch.hann_window(d) * 2
+    window_mask = 1 - torch.cos(x)
 
     phases = torch.exp(torch.arange(float(k)) * scaling_ind)[None, :] * num_cycles * x[:, None]
     filters = torch.stack((torch.cos(phases), torch.sin(phases)), 2) * window_mask[:, None, None]
@@ -54,7 +54,7 @@ class spectrograms(nn.Module):
         x = x.unfold(1, self.d, self.hop_size) @ self.filter_banks.view(self.d, self.k * 2)
         zx = x.view(-1, self.num_regions, self.k, 2).pow(2).sum(3).unsqueeze(1)
         # batch x 1 x 25 x 512
-        z3 = self.w_w2(torch.log(zx+10e-15))
+        z3 = self.w_w2(torch.log(zx + 10e-15))
         # batch x 256 x 1 x 193
         y = self.beta(z3.view(-1, self.num_regions3_x * self.num_regions3_y * self.k3))
         return y
@@ -80,10 +80,10 @@ if __name__ == '__main__':
     import librosa
 
     y, sr = librosa.load(librosa.util.example_audio_file())
-    w = create_filters(1024, 128, sr)
+    w = create_filters(2048, 128, sr)
     y = torch.from_numpy(y).float()
 
-    y = y.unfold(0, 1024, 512) @ w.view(1024, 256)
+    y = y.unfold(0, 2048, 512) @ w.view(2048, 256)
     y = y.view(-1, 128, 2).pow(2).sum(2)
     y = y.detach().numpy().T
     print(y.shape)

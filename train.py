@@ -18,6 +18,12 @@ parser.add_argument('--lr', type=float, default=0.00001)
 parser.add_argument('--steps', type=int, default=500000)
 parser.add_argument('--batch', type=int, default=150)
 
+
+def init_weights(m):
+    if type(m) == nn.Conv2d or type(m) == nn.Linear:
+        m.weight.data.normal_(0, 1e-4)
+
+
 if __name__ == '__main__':
     args = parser.parse_args()
 
@@ -44,6 +50,8 @@ if __name__ == '__main__':
         cudnn.benchmark = True
 
     print(sum(p.numel() for p in net.parameters() if p.requires_grad), "of parameters.")
+
+    net.apply(init_weights)
     ema = EMA(1 - decay)
     for name, p in net.named_parameters():
         if p.requires_grad:
@@ -62,7 +70,7 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
 
                 outputs = net(inputs)
-                loss = criterion(outputs, targets) / 2 / inputs.size(0)
+                loss = criterion(outputs, targets) / 2
                 loss.backward()
                 optimizer.step()
                 for name, p in net.named_parameters():
@@ -70,6 +78,8 @@ if __name__ == '__main__':
                         p.data = ema(name, p.data)
 
                 global_step += 1
+                loss_value = loss.item() / inputs.size(0)
+                # print(global_step, loss.item() / inputs.size(0))
 
                 if global_step % 1000 == 0:
                     net.eval()
@@ -85,7 +95,7 @@ if __name__ == '__main__':
 
                         y_score = np.vstack(y_score).flatten()
                         y_true = np.vstack(y_true).flatten()
-                        print(global_step, loss.item(), average_precision_score(y_true, y_score))
+                        print(global_step, loss_value, average_precision_score(y_true, y_score))
                     net.train()
 
     except KeyboardInterrupt:
