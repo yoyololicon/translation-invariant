@@ -242,7 +242,7 @@ class MusicNet_song(Dataset):
         else:
             raise RuntimeError("Can't find the file.")
 
-        self.size = len(self.data) // hopsize + 1
+        self.size = (len(self.data) - window) // hopsize + 1
         if duration:
             self.data = self.data[:sr * duration + window]
             self.size = int(sr * duration / hopsize) + 1
@@ -253,6 +253,7 @@ class MusicNet_song(Dataset):
     def __getitem__(self, index):
         pos = index * self.hopsize
         x = self.data[pos:pos + self.window]
+        if self.normalize: x = x / (np.linalg.norm(x) + epsilon)
         y = np.zeros(self.m, dtype=np.float32)
         for label in self.label[pos + self.window // 2]:
             y[label.data[1]] = 1

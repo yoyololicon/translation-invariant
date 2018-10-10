@@ -8,14 +8,14 @@ import argparse
 from baseline_model import spectrograms, EMA
 import numpy as np
 from sklearn.metrics import average_precision_score, f1_score, precision_recall_fscore_support
-from musicnet import MusicNet
+from musicnet import MusicNet, MusicNet_song
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root', type=str, default='/host/data_dsk1/dataset/musicnet')
 parser.add_argument('--preprocess', action='store_true')
 parser.add_argument('--outfile', type=str, default='pre-trained.pth')
-parser.add_argument('--lr', type=float, default=0.00001)
-parser.add_argument('--steps', type=int, default=500000)
+parser.add_argument('--lr', type=float, default=0.001)
+parser.add_argument('--steps', type=int, default=100000)
 parser.add_argument('--batch', type=int, default=150)
 
 
@@ -36,7 +36,7 @@ if __name__ == '__main__':
 
     print('==> Loading Data...')
     train_set = MusicNet(args.root, preprocess=args.preprocess, normalize=True, window=window, epoch_size=esize)
-    valid_set = MusicNet(args.root, preprocess=False, normalize=True, window=window, epoch_size=batch_size * 10)
+    valid_set = MusicNet(args.root, train=False, normalize=True, window=window, epoch_size=batch_size * 10)
     train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=4)
     valid_loader = DataLoader(valid_set, batch_size=batch_size, num_workers=4)
 
@@ -57,22 +57,26 @@ if __name__ == '__main__':
         if p.requires_grad:
             ema.register(name, p.data)
 
-    criterion = nn.MSELoss(reduction='sum')
+    criterion = nn.MSELoss()
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.95)
 
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20000, gamma=1/3)
+
     print("Start Training.")
-    print("steps / mse / avp_train")
+    print("steps / mse / avp_train / avp_test")
     global_step = 0
     average_loss = []
+    avp_train = []
     try:
         with train_set, valid_set:
             net.train()
             for batch_idx, (inputs, targets) in enumerate(train_loader):
                 inputs, targets = inputs.to(device), targets.to(device)
+                scheduler.step()
                 optimizer.zero_grad()
 
                 outputs = net(inputs)
-                loss = criterion(outputs, targets) / 2
+                loss = criterion(outputs, targets) * 64
                 loss.backward()
                 optimizer.step()
                 for name, p in net.named_parameters():
@@ -80,9 +84,11 @@ if __name__ == '__main__':
                         p.data = ema(name, p.data)
 
                 global_step += 1
-                loss_value = loss.item() / inputs.size(0)
-                average_loss.append(loss_value)
-                # print(global_step, loss.item() / inputs.size(0))
+                average_loss.append(loss.item())
+
+                y_score = outputs.detach().cpu().numpy().flatten()
+                y_true = targets.detach().cpu().numpy().flatten()
+                avp_train.append(average_precision_score(y_true, y_score))
 
                 if global_step % 1000 == 0:
                     net.eval()
@@ -98,8 +104,10 @@ if __name__ == '__main__':
 
                         y_score = np.vstack(y_score).flatten()
                         y_true = np.vstack(y_true).flatten()
-                        print(global_step, np.mean(average_loss), average_precision_score(y_true, y_score))
+                        print(global_step, np.mean(average_loss), np.mean(avp_train),
+                              average_precision_score(y_true, y_score))
                         average_loss.clear()
+                        avp_train.clear()
                     net.train()
 
     except KeyboardInterrupt:
